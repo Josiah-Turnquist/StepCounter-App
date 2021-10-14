@@ -27,6 +27,7 @@ const val TAG = "StepCounter"
 
 class MainActivity : AppCompatActivity() {
 
+    // Set all values to be shared throughout app
     private val dateFormat = DateFormat.getDateInstance()
     private val calendar = Calendar.getInstance(TimeZone.getTimeZone("UTC"))
     private val currentDate = Date()
@@ -39,16 +40,19 @@ class MainActivity : AppCompatActivity() {
             .build()
     }
 
-    val pastWeekSteps = arrayOf<Int>(100, 200, 400, 800, 1600, 3200, 6400)
+    // temp data until updated.
+    private var pastWeekSteps = arrayOf<Int>(100, 200, 400, 800, 1600, 3200, 6400)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
-        // Setup the Google Sign In button
+        // Display "not signed in" until sign in completed successfully.
+
         val usernameText = findViewById<TextView>(R.id.user_signed_in_text)
         usernameText.text = "Not signed in"
 
+        // Setup the Google Sign In button
 
         val signInButton = findViewById<SignInButton>(R.id.sign_in_button)
         signInButton.setSize(SignInButton.SIZE_STANDARD)
@@ -81,6 +85,8 @@ class MainActivity : AppCompatActivity() {
             .build()
 
         val signInIntent: Intent = GoogleSignIn.getClient(this, gso).signInIntent
+
+        // Technically deprecated but still works...
         startActivityForResult(signInIntent, 1)
     }
 
@@ -125,23 +131,28 @@ class MainActivity : AppCompatActivity() {
         val signInButton = findViewById<SignInButton>(R.id.sign_in_button)
         signInButton.visibility = View.GONE
         readHistoryData()
+
+        // Print name to log
+        Log.e(TAG, "Google signed in under ${account.displayName}\n")
     }
 
     private fun updateUI(account: GoogleSignInAccount) {
-        // Print name to log
-        Log.e(TAG, "Google display name: ${account.displayName}\n")
 
-        // Change username displayed
+        // Update username being displayed
+
         val usernameText = findViewById<TextView>(R.id.user_signed_in_text)
         usernameText.text = "Signed in as ${account.displayName}"
 
         // Change steps displayed
+
         val weeklyStepsText = findViewById<TextView>(R.id.weekly_text)
         val weeklyStepsNum = findViewById<TextView>(R.id.weekly_num)
 
         val weekRange = findViewById<TextView>(R.id.date_above_chart)
         val fmtOut = SimpleDateFormat("MMM dd")
         weekRange.text = "${fmtOut.format(begRange)} - ${fmtOut.format(endRange)}"
+
+        // Get all component ID's
 
         val sundayData = findViewById<TextView>(R.id.sunday_data)
         val sundayText = findViewById<TextView>(R.id.sunday_text)
@@ -164,8 +175,13 @@ class MainActivity : AppCompatActivity() {
         val saturdayData = findViewById<TextView>(R.id.saturday_data)
         val saturdayText = findViewById<TextView>(R.id.saturday_text)
 
+        // Calculate avg steps from the week
+
         weeklyStepsText.text = "Weekly Average"
         weeklyStepsNum.text = "${pastWeekSteps.average().toInt()}"
+
+        // Set chart labels -- technically doesn't need to do all of these each time... we don't
+        // currently need to save the processing speed so we'll leave it.
 
         sundayData.text = "${pastWeekSteps[0]}"
         sundayText.text = "Sun"
@@ -190,17 +206,17 @@ class MainActivity : AppCompatActivity() {
     }
 
     /**
-     * Gets a Google account -- either uses last signed in account,
-     * or if necessary, prompts the user to sign in.
+     * Gets a Google account -- or uses last signed in account,
      */
     private fun getGoogleAccount() = GoogleSignIn.getAccountForExtension(this, fitnessOptions)
 
 
     /**
-     * Asynchronous task to read the history data. When the task succeeds, it will print out the
-     * data.
+     * Asynchronous task to read the history data. When the task succeeds, it will print out and
+     * record the data. At the final stage, updateUI is called, updating the user screen with the
+     * new values.
      */
-    private fun readHistoryData(relativeWeek: Int = -1): Task<DataReadResponse> {
+    private fun readHistoryData(relativeWeek: Int = +1): Task<DataReadResponse> {
         // Begin by creating the query (get the DataReadResponse task).
         val readRequest = queryFitnessData(relativeWeek)
 
@@ -208,7 +224,7 @@ class MainActivity : AppCompatActivity() {
         return Fitness.getHistoryClient(this, getGoogleAccount())
             .readData(readRequest)
             .addOnSuccessListener { dataReadResponse ->
-                // Dump / Print data.
+                // Print / record data.
                 printData(dataReadResponse)
             }
             .addOnFailureListener { e ->
@@ -217,14 +233,14 @@ class MainActivity : AppCompatActivity() {
     }
 
     /** Returns a [DataReadRequest] for all step count changes in the past week.  */
-    private fun queryFitnessData(relativeWeek: Int = -1): DataReadRequest {
+    private fun queryFitnessData(relativeWeek: Int = +1): DataReadRequest {
         // Setting a start and end date using a range of 1 week before this moment.
         calendar.time = currentDate
 
         // Get beginning of week
         val yr = calendar.get(Calendar.YEAR)
         val mo = calendar.get(Calendar.MONTH)
-        val days = calendar.get(Calendar.DAY_OF_MONTH) - calendar.get(Calendar.DAY_OF_WEEK) + 8
+        val days = calendar.get(Calendar.DAY_OF_MONTH) - calendar.get(Calendar.DAY_OF_WEEK) + 1
         calendar.set(yr, mo, days)
 
         // Set to midnight
@@ -233,19 +249,17 @@ class MainActivity : AppCompatActivity() {
         calendar.set(Calendar.SECOND, 0)
         calendar.set(Calendar.AM_PM, 0)
 
-        endRange = calendar.timeInMillis
-        calendar.add(Calendar.WEEK_OF_YEAR, relativeWeek) //
         begRange = calendar.timeInMillis
+        calendar.add(Calendar.WEEK_OF_YEAR, relativeWeek) // Ready to add extra functionality (see previous weeks). Checks current week by default
+        endRange = calendar.timeInMillis
 
         Log.i(TAG, "Range Start: ${DateFormat.getDateTimeInstance().format(begRange)}")
-
         Log.i(TAG, "Range End: ${DateFormat.getDateTimeInstance().format(endRange)}")
 
         return DataReadRequest.Builder()
             // The double-parameter .aggregate function call is deprecated -- only the AGGREGATE_STEP_COUNT_DELTA is necessary now.
             .aggregate(DataType.AGGREGATE_STEP_COUNT_DELTA)
-            // bucketByTime allows for a time span, whereas bucketBySession would allow
-            // bucketing by "sessions", which would need to be defined in code.
+            // bucketByTime allows for a time span (1 24-hour day)
             .bucketByTime(1, TimeUnit.DAYS)
             .setTimeRange(begRange, endRange, TimeUnit.MILLISECONDS)
             .build()
@@ -260,11 +274,9 @@ class MainActivity : AppCompatActivity() {
         // as buckets containing DataSets, instead of just DataSets.
         if (dataReadResult.buckets.isNotEmpty()) {
             Log.i(TAG, "Number of returned buckets of DataSets is: " + dataReadResult.buckets.size)
-            Log.i(TAG, " -- PARSING ALL BUCKETS -- ")
 
             var i = 0
             for (bucket in dataReadResult.buckets) {
-                Log.i(TAG, " -- dumping a bucket -- ")
                     bucket.dataSets.forEach() { dumpDataSet(it, i)}
                 i += 1
             }

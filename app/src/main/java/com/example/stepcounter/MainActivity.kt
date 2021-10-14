@@ -291,12 +291,10 @@ class MainActivity : AppCompatActivity() {
         Log.i(TAG, "Data returned for Data type ${dataSet.dataType.name}")
 
         for (dp in dataSet.dataPoints) {
-            Log.i(TAG, "\tData point:")
+            Log.i(TAG, " - Data point:")
             Log.i(TAG, "\t\tType: ${dp.dataType.name}")
             Log.i(TAG, "\t\tStart: ${dateFormat.format(dp.getStartTime(TimeUnit.MILLISECONDS))}")
             Log.i(TAG, "\t\tEnd: ${dateFormat.format(dp.getEndTime(TimeUnit.MILLISECONDS))}")
-            val dayStr = dateFormat.format(dp.getStartTime(TimeUnit.MILLISECONDS))
-            Log.i(TAG, "DAY ${dayStr}")
             dp.dataType.fields.forEach {
                 Log.i(TAG, "\t\t\tField: ${it.name}")
                 Log.i(TAG, "\t\t\tValue: ${dp.getValue(it)}")
@@ -307,6 +305,7 @@ class MainActivity : AppCompatActivity() {
         // If null (future date) set steps to zero.
         if (dataSet.dataPoints.isEmpty()) {
             pastWeekSteps[day] = 0
+            Log.i(TAG, "\t\tEmpty data set")
         }
     }
 
